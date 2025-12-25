@@ -1,50 +1,42 @@
-name: Build
+name: Build Android APK
 
 on:
   push:
-  pull_request:
-  schedule:
-    # runs the CI everyday at 10AM
-    - cron: "0 10 * * *"
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
-  flutter:
+  build:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        package:
-          - flutter_hooks
-        channel:
-          - master
-          - stable
-      fail-fast: false
-
     steps:
-      - uses: actions/checkout@v2
-      - uses: subosito/flutter-action@v1
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
         with:
-          channel: ${{ matrix.channel }}
+          distribution: 'zulu'
+          java-version: '17'
 
-      - name: Install dependencies
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          flutter-version: '3.19.0' # 或者 'any'
+
+      - name: Get Dependencies
         run: flutter pub get
-        working-directory: packages/${{ matrix.package }}
 
-      - name: Check format
-        run: dart format --set-exit-if-changed .
-        if: matrix.channel == 'stable'
-        working-directory: packages/${{ matrix.package }}
+      # 这里我们构建 Debug 版本。
+      # 原因：Release 版本如果不配置签名文件(Keystore)，
+      # 生成的 APK 无法在大部分安卓手机上直接安装。
+      # Debug 版本自带测试签名，可以直接安装并运行。
+      - name: Build Android APK (Debug)
+        run: flutter build apk --debug
 
-      - name: Analyze
-        run: dart analyze .
-        if: matrix.channel == 'stable'
-        working-directory: packages/${{ matrix.package }}
-
-      - name: Run tests
-        run: flutter test --coverage
-        working-directory: packages/${{ matrix.package }}
-
-      - name: Upload coverage to codecov
-        run: curl -s https://codecov.io/bash | bash
-        if: matrix.channel == 'stable'
-        working-directory: packages/${{ matrix.package }}
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: huarong-road-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
